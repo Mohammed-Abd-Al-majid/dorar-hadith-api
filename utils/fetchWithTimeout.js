@@ -21,7 +21,11 @@ module.exports = async (url, options = {}) => {
     const response = await fetch(url, { ...options, redirect: 'error', signal, headers: {
       'User-Agent': 'Tathabbat/2.0', Accept: 'application/json, text/html', 'Accept-Language': 'ar', ...options.headers
     }});
-    if (!response.ok) throw new AppError('Source request failed', response.status === 404 ? 404 : response.status === 429 ? 429 : 502);
+    if (!response.ok) {
+      // Failed responses still own a socket until their body is consumed or cancelled.
+      await response.body?.cancel().catch(() => {});
+      throw new AppError('Source request failed', response.status === 404 ? 404 : response.status === 429 ? 429 : 502);
+    }
     // Consume the entire body within the same deadline; cap response memory.
     const chunks = []; let size = 0;
     for await (const chunk of response.body) {

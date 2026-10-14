@@ -109,3 +109,22 @@ test('upstream HTTP errors release unread bodies and preserve status mapping', a
     }
   } finally { global.fetch = mock; }
 });
+test('adapter error logs identify failures without exposing search text or credentials', () => {
+  const handler = require('../middleware/errorHandler');
+  const originalError = console.error;
+  const entries = [];
+  console.error = entry => entries.push(JSON.parse(entry));
+  try {
+    const res = {
+      headersSent: false,
+      set() { return this; },
+      status(code) { this.statusCode = code; return this; },
+      json(body) { this.body = body; return this; }
+    };
+    handler(Object.assign(new Error('private search phrase'), { statusCode: 502, code: 'PARSER_FAILURE' }), {
+      method: 'GET', path: '/v1/site/hadith/search', get: name => name === 'x-request-id' ? 'request-123' : ''
+    }, res, () => assert.fail('next should not be called'));
+    assert.deepEqual(entries[0], { event: 'request_failed', requestId: 'request-123', method: 'GET', path: '/v1/site/hadith/search', status: 502, error: 'Error', code: 'PARSER_FAILURE' });
+    assert.equal(JSON.stringify(entries).includes('private search phrase'), false);
+  } finally { console.error = originalError; }
+});

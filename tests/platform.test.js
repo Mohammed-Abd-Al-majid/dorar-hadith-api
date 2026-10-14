@@ -104,7 +104,7 @@ test('upstream HTTP errors release unread bodies and preserve status mapping', a
         start(controller) { controller.enqueue(new TextEncoder().encode('unfinished error body')); },
         cancel() { cancelled = true; }
       }), { status });
-      await assert.rejects(fetcher('https://dorar.net/test'), error => error.statusCode === expected);
+      await assert.rejects(fetcher('https://dorar.net/test'), error => error.statusCode === expected && error.code === `upstream_http_${status}`);
       assert.equal(cancelled, true, `HTTP ${status} must release its body`);
     }
   } finally { global.fetch = mock; }

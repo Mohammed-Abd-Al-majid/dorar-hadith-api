@@ -24,7 +24,9 @@ module.exports = async (url, options = {}) => {
     if (!response.ok) {
       // Failed responses still own a socket until their body is consumed or cancelled.
       await response.body?.cancel().catch(() => {});
-      throw new AppError('Source request failed', response.status === 404 ? 404 : response.status === 429 ? 429 : 502);
+      const error = new AppError('Source request failed', response.status === 404 ? 404 : response.status === 429 ? 429 : 502);
+      error.code = `upstream_http_${response.status}`;
+      throw error;
     }
     // Consume the entire body within the same deadline; cap response memory.
     const chunks = []; let size = 0;

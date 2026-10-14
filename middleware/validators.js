@@ -11,32 +11,16 @@ const validateRequest = (req, res, next) => {
   next();
 };
 
-const validateFilters = (req, res, next) => {
-  const allowed = new Set(['page', 'value', 'xclude', 'st', 't', 'd', 'm', 's', 'rawi']);
-  for (const [key, value] of Object.entries(req.query)) {
-    if (!allowed.has(key)) return next(new AppError('Unknown search parameter', 400));
-    if (['d', 'm', 's', 'rawi'].includes(key)) {
-      const values = Array.isArray(value) ? value : [value];
-      if (values.length > 20 || values.some(v => typeof v !== 'string' || !/^\d+(?:-\d+)*$/.test(v) || v.length > 80)) return next(new AppError('Invalid filter IDs', 400));
-      if (key === 'd' && values.some(v => !['0', '1', '2', '3', '4'].includes(v))) return next(new AppError('Invalid degree filter', 400));
-      req.query[key] = values;
-    } else if (typeof value !== 'string') return next(new AppError('Expected scalar parameter', 400));
-  }
-  if (req.query.st && !['w', 'a', 'p'].includes(req.query.st)) return next(new AppError('Invalid match mode', 400));
-  if (req.query.t && !['*', '0', '1', '2', '3'].includes(req.query.t)) return next(new AppError('Invalid scope', 400));
-  if ((req.query.xclude || '').length > 200) return next(new AppError('Exclusion too long', 400));
-  next();
-};
 // Validation rules for hadith search
-const validateHadithSearch = [validateFilters,
+const validateHadithSearch = [
   query('page')
     .default(1)
-    .isInt({ min: 1, max: 1000 })
+    .isInt({ min: 1 })
     .withMessage('Page must be a positive integer'),
   query('value')
     .isString()
     .trim()
-    .isLength({ min: 1, max: 2000 }).notEmpty()
+    .notEmpty()
     .withMessage('Search value cannot be empty'),
   validateRequest
 ];
@@ -44,7 +28,7 @@ const validateHadithSearch = [validateFilters,
 // Validation rules for hadith ID
 const validateHadithId = [
   param('id')
-    .isLength({ min: 1, max: 2000 }).notEmpty()
+    .notEmpty()
     .withMessage('Hadith ID is required')
     .isString()
     .trim()
@@ -54,15 +38,15 @@ const validateHadithId = [
 ];
 
 // Validation rules for sharh search
-const validateSharhSearch = [validateFilters,
+const validateSharhSearch = [
   query('page')
     .default(1)
-    .isInt({ min: 1, max: 1000 })
+    .isInt({ min: 1 })
     .withMessage('Page must be a positive integer'),
   query('value')
     .isString()
     .trim()
-    .isLength({ min: 1, max: 2000 }).notEmpty()
+    .notEmpty()
     .withMessage('Search value cannot be empty'),
   validateRequest
 ];
@@ -70,7 +54,7 @@ const validateSharhSearch = [validateFilters,
 // Validation rules for sharh ID
 const validateSharhId = [
   param('id')
-    .isLength({ min: 1, max: 2000 }).notEmpty()
+    .notEmpty()
     .withMessage('Sharh ID is required')
     .isString()
     .trim()
@@ -84,7 +68,7 @@ const validateSharhText = [
   param('text')
   .isString()
   .trim()
-  .isLength({ min: 1, max: 2000 }).notEmpty()
+  .notEmpty()
   .withMessage('Search text cannot be empty'),
   validateRequest
 ];
@@ -92,7 +76,7 @@ const validateSharhText = [
 // Validation rules for book ID
 const validateBookId = [
   param('id')
-    .isLength({ min: 1, max: 2000 }).notEmpty()
+    .notEmpty()
     .withMessage('Book ID is required')
     .isString()
     .trim()
@@ -104,7 +88,7 @@ const validateBookId = [
 // Validation rules for mohdith ID
 const validateMohdithId = [
   param('id')
-    .isLength({ min: 1, max: 2000 }).notEmpty()
+    .notEmpty()
     .withMessage('Mohdith ID is required')
     .isString()
     .trim()

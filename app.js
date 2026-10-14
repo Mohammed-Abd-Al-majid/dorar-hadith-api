@@ -1,5 +1,8 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
+const cors = require('cors');
 const helmet = require('helmet');
+const timeout = require('connect-timeout');
 
 const docs = require('./docs');
 const hadithSearchRouter = require('./routes/hadithSearch.routes');
@@ -13,39 +16,27 @@ const AppError = require('./utils/AppError');
 
 const swaggerUi = require('swagger-ui-express');
 const YAML = require('yamljs');
-const swaggerDocument = YAML.load(require('node:path').join(__dirname, 'api-docs/openapi.yaml'));
+const swaggerDocument = YAML.load('api-docs/openapi.yaml');
 
 const app = express();
 
-app.disable('x-powered-by');
-app.set('trust proxy', false); // Configure explicit proxy CIDRs at the edge; never trust arbitrary XFF.
+// Security Middleware
 app.use(helmet());
-app.get('/health/live', (req, res) => res.json({ status: 'ok' }));
-app.get('/health/ready', async (req, res) => {
-  try { await require('./services/common/store').redis(); res.json({ status: 'ready' }); }
-  catch { res.status(503).json({ status: 'unavailable' }); }
-});
-if (process.env.NODE_ENV === 'production' && (!process.env.SERVICE_API_KEY || !process.env.REDIS_URL)) {
-  throw new Error('Production requires SERVICE_API_KEY and REDIS_URL');
-}
-app.use((req, res, next) => {
-  const expected = process.env.SERVICE_API_KEY;
-  const supplied = req.get('x-service-key') || '';
-  const crypto = require('node:crypto');
-  if (expected && (Buffer.byteLength(supplied) !== Buffer.byteLength(expected) || !crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(expected)))) {
-    return res.status(401).json({ code: 'unauthorized', message: 'Service authentication required' });
-  }
-  next();
-});
-app.get('/metrics', (req, res) => res.type('text/plain').send(require('./utils/metrics').render()));
-app.use((req, res, next) => { res.on('finish', () => require('./utils/metrics').add('http_' + Math.floor(res.statusCode / 100) + 'xx')); next(); });
+app.use(cors());
+app.use(timeout(config.expressTimeout));
 app.use(express.json({ limit: config.expressJsonLimit }));
-app.use((req, res, next) => {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 25000);
-  res.on('close', () => { clearTimeout(timer); controller.abort(); });
-  require('./utils/requestContext').run({ signal: controller.signal }, next);
-});
+
+// Rate Limiting
+app.use(
+  rateLimit({
+    windowMs: config.rateLimitEach,
+    max: config.rateLimitMax,
+    message: 'Rate limit exceeded. Please try again later.',
+    handler: (req, res, next, option) => {
+      next(new AppError(option.message, 429));
+    },
+  }),
+);
 
 // Request Processing Middleware
 app.use((req, res, next) => {
@@ -54,20 +45,17 @@ app.use((req, res, next) => {
     return next(new AppError('Request timeout', 408));
   }
 
-  for (const field of ['removehtml', 'specialist']) {
-    if (req.query[field] !== undefined && (typeof req.query[field] !== 'string' || !['true', 'false'].includes(req.query[field].toLowerCase()))) return next(new AppError('Invalid boolean search parameter', 400));
-  }
   // Process removeHTML parameter
   req.isRemoveHTML = req.query.removehtml || true;
   req.isRemoveHTML =
-    String(req.query.removehtml).toLowerCase() === 'false' ? false : true;
+    req.query.removehtml?.toLowerCase() === 'false' ? false : true;
   
   delete req.query.removehtml;
 
   // Process specialist parameter
   req.isForSpecialist = req.query.specialist || false;
   req.isForSpecialist =
-    String(req.query.specialist).toLowerCase() === 'true' ? true : false;
+    req.query.specialist?.toLowerCase() === 'true' ? true : false;
   req.tab = req.isForSpecialist ? 'specialist' : 'home';
 
   delete req.query.specialist;
@@ -78,7 +66,7 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
   res.status(302).redirect('/docs');
 });
-if (process.env.NODE_ENV !== 'production') app.get('/docs', docs);
+app.get('/docs', docs);
 
 app.use('/v1', hadithSearchRouter);
 app.use('/v1', sharhSearchRouter);
@@ -87,7 +75,7 @@ app.use('/v1', bookSearchRouter);
 app.use('/v1', dataRouter);
 
 // Serve Swagger UI
-if (process.env.NODE_ENV !== 'production') app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // 404 Handler
 app.all('*', (req, res, next) => {

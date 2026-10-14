@@ -16,7 +16,7 @@ const getSharhById = async (sharhId) => {
     throw new AppError('Invalid response structure from Dorar', 502);
   }
 
-  const hadith = article.textContent.replace(/^\s*-\s*/, '').trim();
+  const hadith = article.textContent.replace(/-\s*/g, '').trim();
   const [rawi, mohdith, book, numberOrPage, grade, takhrij] = [
     ...doc.querySelectorAll('.primary-text-color'),
   ].map((el) => el.textContent.trim());
@@ -46,15 +46,14 @@ const getSharhById = async (sharhId) => {
 
 const getOneSharhByIdUsingSiteDorar = async ({ sharhId }) => {
   const url = `https://www.dorar.net/hadith/sharh/${sharhId}`;
-  const cacheKey = JSON.stringify(['v2', 'getOneSharhByIdUsingSiteDorar', url, typeof isRemoveHTML === 'undefined' ? true : isRemoveHTML, typeof tab === 'undefined' ? '' : tab]);
 
-  const cached = await getCachedResponse(cacheKey);
+  const cached = getCachedResponse(url);
   if (cached) {
     return cached;
   }
 
   const result = await getSharhById(sharhId);
-  return setCachedResponse(cacheKey, result, {});
+  return setCachedResponse(url, result, {});
 };
 
 const getOneSharhByTextUsingSiteDorar = async ({ text, tab, isForSpecialist }) => {
@@ -62,10 +61,9 @@ const getOneSharhByTextUsingSiteDorar = async ({ text, tab, isForSpecialist }) =
     throw new AppError('Text of sharh is required', 400);
   }
 
-  const url = `https://www.dorar.net/hadith/search?q=${encodeURIComponent(text)}${tab === 'specialist' ? '&all' : ''}`;
-  const cacheKey = JSON.stringify(['v2', 'getOneSharhByTextUsingSiteDorar', url, typeof isRemoveHTML === 'undefined' ? true : isRemoveHTML, typeof tab === 'undefined' ? '' : tab]);
+  const url = `https://www.dorar.net/hadith/search?q=${text}${tab === 'specialist' ? '&all' : ''}`;
 
-  const cached = await getCachedResponse(cacheKey);
+  const cached = getCachedResponse(url);
   if (cached) {
     return {
       ...cached,
@@ -87,16 +85,15 @@ const getOneSharhByTextUsingSiteDorar = async ({ text, tab, isForSpecialist }) =
     throw new AppError('No sharh found for the given text', 404);
   }
 
-  const result = ((await getOneSharhByIdUsingSiteDorar({ sharhId })).data);
-  return setCachedResponse(cacheKey, result, { firstMatchOnly: true, specialist: isForSpecialist });
+  const result = await getSharhById(sharhId);
+  return setCachedResponse(url, result, { specialist: isForSpecialist });
 };
 
 const getAllSharhUsingSiteDorar = async ({ queryParams, tab, isRemoveHTML, isForSpecialist }) => {
   const query = serializeQueryParams(queryParams).replace('value=', 'q=') || '';
   const url = `https://www.dorar.net/hadith/search?${query}${tab === 'specialist' ? '&all' : ''}`;
-  const cacheKey = JSON.stringify(['v2', 'getAllSharhUsingSiteDorar', url, typeof isRemoveHTML === 'undefined' ? true : isRemoveHTML, typeof tab === 'undefined' ? '' : tab]);
 
-  const cached = await getCachedResponse(cacheKey);
+  const cached = getCachedResponse(url);
   if (cached) {
     return cached;
   }
@@ -124,8 +121,7 @@ const getAllSharhUsingSiteDorar = async ({ queryParams, tab, isRemoveHTML, isFor
     };
   }
 
-  // Discovery returns references only. Bodies are loaded on demand by ID.
-  const result = [...new Set(sharhIds)].map(id => ({ sharhMetadata: { id, isContainSharh: false, urlToGetSharhById: `/v1/site/sharh/${id}` } }));
+  const result = await Promise.all(sharhIds.map((id) => getSharhById(id)));
   const metadata = {
     length: result.length,
     page: queryParams.page,
@@ -133,11 +129,11 @@ const getAllSharhUsingSiteDorar = async ({ queryParams, tab, isRemoveHTML, isFor
     specialist: isForSpecialist,
   };
 
-  return setCachedResponse(cacheKey, result, metadata);
+  return setCachedResponse(url, result, metadata);
 };
 
-module.exports = require('../common/singleFlight')({
+module.exports = {
   getOneSharhByIdUsingSiteDorar,
   getOneSharhByTextUsingSiteDorar,
   getAllSharhUsingSiteDorar,
-});
+};

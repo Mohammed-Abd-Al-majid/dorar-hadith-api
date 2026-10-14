@@ -10,7 +10,10 @@ module.exports = (error, req, res, next) => {
       path: req.path,
       status,
       error: error.name || 'Error',
-      code: typeof error.code === 'string' ? error.code : undefined
+      code: typeof error.code === 'string' ? error.code : typeof error.cause?.code === 'string' ? error.cause.code : undefined,
+      // Messages are capped and URLs/secrets removed; never log request query values.
+      detail: String(error.message || '').replace(/https?:\/\/[^\s]+/gi, '[url]')
+        .replace(/(password|token|secret|api[_-]?key)=([^\s&]+)/gi, '$1=[redacted]').slice(0, 160) || undefined
     }));
   }
   if (status === 429 || status === 503) res.set('Retry-After', '60');

@@ -94,3 +94,18 @@ test('a stalled body reaches its deadline without other event-loop handles', () 
   assert.ifError(result.error);
   assert.equal(result.status, 0, result.stderr || 'Process exited before the deadline rejected');
 });
+test('upstream HTTP errors release unread bodies and preserve status mapping', async () => {
+  const fetcher = require('../utils/fetchWithTimeout');
+  const mock = global.fetch;
+  try {
+    for (const [status, expected] of [[404, 404], [429, 429], [500, 502]]) {
+      let cancelled = false;
+      global.fetch = async () => new Response(new ReadableStream({
+        start(controller) { controller.enqueue(new TextEncoder().encode('unfinished error body')); },
+        cancel() { cancelled = true; }
+      }), { status });
+      await assert.rejects(fetcher('https://dorar.net/test'), error => error.statusCode === expected);
+      assert.equal(cancelled, true, `HTTP ${status} must release its body`);
+    }
+  } finally { global.fetch = mock; }
+});

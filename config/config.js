@@ -3,7 +3,7 @@ const toNumber = (value, fallback) => {
   return Number.isNaN(parsed) ? fallback : parsed;
 };
 
-module.exports = {
+module.exports = config = {
   /** @type {number}
    * @description default port to localhost
    * @default 5000
@@ -28,7 +28,7 @@ module.exports = {
    * @default 5 seconds
    * @example 5 * 1000 // 5 seconds
    */
-  cacheEach: toNumber(process.env.CACHE_EACH, 60),
+  cacheEach: toNumber(process.env.CACHE_EACH, 5),
 
   /** @type {number}
    * @description timeout for fetch requests

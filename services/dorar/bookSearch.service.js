@@ -11,8 +11,7 @@ const getOneBookByIdUsingSiteDorar = async ({ bookId }) => {
   }
 
   const url = `https://www.dorar.net/hadith/book-card/${bookId}`;
-  const cacheKey = JSON.stringify(['v2', 'getOneBookByIdUsingSiteDorar', url, typeof isRemoveHTML === 'undefined' ? true : isRemoveHTML, typeof tab === 'undefined' ? '' : tab]);
-  const cached = await getCachedResponse(cacheKey);
+  const cached = getCachedResponse(url);
   if (cached) {
     return cached;
   }
@@ -21,7 +20,6 @@ const getOneBookByIdUsingSiteDorar = async ({ bookId }) => {
   const html = decode(await response.json());
   const doc = parseHTML(html).document;
 
-  if (!doc.querySelector('h5')) throw new AppError('Invalid book structure', 502);
   const name = doc
     .querySelector('h5')
     .textContent.replace(/^\d+\s-/, '')
@@ -38,12 +36,12 @@ const getOneBookByIdUsingSiteDorar = async ({ bookId }) => {
     reviewer,
     publisher,
     edition,
-    editionYear: editionYear?.match(/^\d+/)?.[0] || null,
+    editionYear: editionYear.match(/^\d+/)[0],
   };
 
-  return setCachedResponse(cacheKey, result, {});
+  return setCachedResponse(url, result, {});
 };
 
-module.exports = require('../common/singleFlight')({
+module.exports = {
   getOneBookByIdUsingSiteDorar,
-});
+};
